@@ -191,7 +191,7 @@ def main():
             value = mysql.get_repl_delay_time()
         else:
             value = mysql.get_item_tval(key)
-        if value:
+        if value != "" and value is not None:
             print value
 
     except Exception as expt:
