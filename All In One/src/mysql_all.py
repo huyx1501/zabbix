@@ -13,16 +13,17 @@ from qiueer.python.cmds import cmds
 from qiueer.python.filecache import filecache
 from qiueer.python.utils import which
 
+
 class Mysql(object):
     
-    def __init__(self, iphost, username="monitor_user", password="m_D1Jo6Jj_xo", port=3306, force=False, debug=True):
+    def __init__(self, iphost, username, password, port, force=False, debug=True):
         self._iphost = iphost
         self._username = username
         self._password = password
         self._port = port
         self._force = force
         curuser = getpass.getuser()
-        self._logpath = "/tmp/zabbix_mysql_variables_slave_status_by_%s.log" % (curuser)
+        self._logpath = "/tmp/zabbix_mysql_variables_slave_status_by_%s.log" % curuser
         self._file_cache_path = "/tmp/.zabbix_mysql_variables_slave_status_%s_by_%s.txt" % (port, curuser)
         self._file_cache = filecache(self._file_cache_path)
         self._logger = slog(self._logpath, debug=debug, size=5, count=5)
@@ -30,9 +31,9 @@ class Mysql(object):
     def get_logger(self):
         return self._logger
 
-    def get_mysql_cmd_output(self, cmdstr, hostname=None,username=None,password=None,port=None):
+    def get_mysql_cmd_output(self, cmdstr, hostname=None, username=None, password=None, port=None):
         try:
-            hostname= hostname if hostname else self._iphost
+            hostname = hostname if hostname else self._iphost
             username = username if username else self._username
             passwd = password if password else self._password
             port = port if port else self._port
@@ -42,7 +43,7 @@ class Mysql(object):
                 bp,
                 "/data0/mysql/product/bin/mysql",
             ]
-            mysql_bp = None
+            mysql_path = None
             for p in binpaths:
                 if os.path.isfile(p):
                     mysql_path = p
@@ -50,13 +51,13 @@ class Mysql(object):
                 
             if not mysql_path:
                 return
-            sql_cmdstr = '%s -h%s -P%s -u%s -p%s -e "%s"' % (mysql_path,hostname,port,username,passwd, cmdstr)
+            sql_cmdstr = '%s -h%s -P%s -u"%s" -p"%s" -e "%s"' % (mysql_path, hostname, port, username, passwd, cmdstr)
             c2 = cmds(sql_cmdstr, timeout=2)
             stdo = c2.stdo()
             stde = c2.stde()
             retcode = c2.code()
             logdict = {
-                #"cmdstr": cmdstr,
+                # "cmdstr": cmdstr,
                 "cmdstr": sql_cmdstr,
                 "stdo": stdo,
                 "stde": stde,
@@ -64,7 +65,7 @@ class Mysql(object):
                 "orders": ["cmdstr", "stdo", "stde", "retcode"],
             }
             
-            if retcode !=0:
+            if retcode != 0:
                     self._logger.dictlog(width=8, level="error", **logdict)
                     return None
             else:
@@ -72,12 +73,14 @@ class Mysql(object):
     
             output_list = re.split("[\n]+", str(stdo).strip())
             content = dict()
+            # 将命令行返回的内容解析成字典
             for line in output_list:
                 line = str(line).strip().replace(" ", "").strip("|").lower()
-                #line_ary = re.split(r"[\s]+", line)
+                # line_ary = re.split(r"[\s]+", line)
                 line_ary = re.split(r"[\s|\||:|;|,]+", line)
-                if len(line_ary) < 2:continue
-                if content.has_key(line_ary[0]):
+                if len(line_ary) < 2:
+                    continue
+                if line_ary[0] in content:
                     pass
                 content[line_ary[0]] = line_ary[1]
             return content
@@ -89,14 +92,14 @@ class Mysql(object):
     def get_value(self, key, hostname=None, username=None, password=None, port=None):
         force = self._force
         key = str(key).lower()
-        #cmdstr = "SHOW VARIABLES; SHOW GLOBAL STATUS; SHOW SLAVE STATUS"
-        cmdstr = "SHOW VARIABLES; SHOW GLOBAL STATUS; SHOW SLAVE STATUS\G"
-        if force == True:
+        # cmdstr = "SHOW VARIABLES; SHOW GLOBAL STATUS; SHOW SLAVE STATUS"
+        cmdstr = r"SHOW VARIABLES; SHOW GLOBAL STATUS; SHOW SLAVE STATUS\G"
+        if force:
             content = self.get_mysql_cmd_output(cmdstr, hostname=hostname, username=username, password=password, port=port)
             self._file_cache.save_to_cache_file(content)
             return content.get(key, None)
         
-        (value, code) = self._file_cache.get_val_from_json(key)
+        value, code = self._file_cache.get_val_from_json(key)
         logdict = {
             "msg": "Try To Get From Cache File: %s" % self._file_cache_path,
             "key": key,
@@ -104,21 +107,21 @@ class Mysql(object):
             "orders": ["msg", "key", "value"],
         }
         self._logger.dictlog(width=8, level="info", **logdict)
-        if code == 0: return value
-        if code in [1, 2]: ## 超时，或异常或文件不存在
+        if code == 0:
+            return value
+        if code in [1, 2]:  # 超时，或异常或文件不存在
             content = self.get_mysql_cmd_output(cmdstr, hostname=hostname, username=username, password=password, port=port)
             self._file_cache.save_to_cache_file(content)
-            (value, code) = self._file_cache.get_val_from_json(key)
-            return value
+            return content.get(key, None)
         return None
     
     def get_item_tval(self, key):
         val = self.get_value(key)
         try:
-            if re.match("(\d+)", val):
+            if re.match(r"(\d+)", val):
                 return int(val)
-            if re.match("(\d+\.\d+)", val):
-                fval = "%.2f" % (val)
+            if re.match(r"(\d+\.\d+)", val):
+                fval = "%.2f" % val
                 return float(fval)
             return val
         except:
@@ -131,7 +134,7 @@ class Mysql(object):
         key = 'Seconds_Behind_Master'
         val = self.get_item_tval(key)
         if str(val).lower().strip() == "null":
-            val = -1  #主从同步已断开
+            val = -1  # 主从同步已断开
         return val
     
     def check_replication(self):
@@ -148,6 +151,7 @@ class Mysql(object):
         if str(v2).lower().strip() == "yes":
             total += 1
         return total
+
 
 def main():
     usage = "usage: %prog [options]\n Fetch mysql status"
@@ -184,17 +188,16 @@ def main():
     mysql = Mysql(hostname, username=username, password=password, port=port, debug=options.debug, force=options.force)
     try:
         key = options.key
-        value = None
         if key == "is_replication":
-            value =  mysql.check_replication()
+            value = mysql.check_replication()
         elif key == "repl_delay_time":
             value = mysql.get_repl_delay_time()
         else:
             value = mysql.get_item_tval(key)
         if value != "" and value is not None:
-            print value
+            print(value)
 
-    except Exception as expt:
+    except Exception:
         import traceback
         tb = traceback.format_exc()
         mysql.get_logger().error(tb)

@@ -1,9 +1,9 @@
-#encoding=UTF8
+# encoding=UTF8
 import os
 import re
-import types
 import json
 import time
+
 
 class filecache(object):
     
@@ -22,29 +22,32 @@ class filecache(object):
                 1: 异常
                 2: 超时
         """
-        if os.path.exists(self._cache_file) == False:
-            return (None, 1)
-        
-        fd = open(self._cache_file, "r")
-        alllines = fd.readlines()
-        fd.close()
-        
-        if not alllines or len(alllines) < 1: return (None, 1)
+        if not os.path.exists(self._cache_file):
+            return None, 1
+
+        with open(self._cache_file, "r") as fd:
+            alllines = fd.readlines()
+        if not alllines or len(alllines) < 1:  # 没有数据
+            return None, 1
         old_unixtime = int(str(alllines[0]).strip())
         now_unixtime = int(time.time())
-        ## 超过60s
-        if (now_unixtime - old_unixtime) > seconds:
-            return (None, 2)
-        resobj = str(alllines[1]).strip()
-        resobj = json.loads(resobj)
+        if (now_unixtime - old_unixtime) > seconds:  # 超过60s
+            return None, 2
+        try:
+            resobj = str(alllines[1]).strip()
+            resobj = json.loads(resobj)
+        except (ValueError, IndexError):  # 数据格式错误
+            return None, 1
 
         keys = re.split(r"\.", key)
         dict_or_val = resobj
+        if not isinstance(dict_or_val, dict):  # 缓存文件数据异常
+            # return dict_or_val, 0
+            return None, 1
         for k in keys:
             k = str(k).strip()
-            if type(dict_or_val) != types.DictType: return (dict_or_val, 0)
             dict_or_val = dict_or_val.get(k, None)
-        return (dict_or_val, 0)
+        return dict_or_val, 0
     
     def get_val_from_lines(self, key, separator=":", seconds=60):
         """
@@ -55,33 +58,33 @@ class filecache(object):
                 1: 异常
                 2: 超时
         """
-        if os.path.exists(self._cache_file) == False:
-            return (None, 1)
+        if not os.path.exists(self._cache_file):
+            return None, 1
 
-        fd = open(self._cache_file, "r")
-        alllines = fd.readlines()
-        fd.close()
-        
-        if not alllines or len(alllines)<1: return (None, 1)
+        with open(self._cache_file, "r") as fd:
+            alllines = fd.readlines()
+        if not alllines or len(alllines) < 1:  # 没有数据
+            return None, 1
         old_unixtime = int(str(alllines[0]).strip())
         now_unixtime = int(time.time())
-        ## 超过60s
-        if (now_unixtime - old_unixtime) > seconds:  return (None, 2)
+        if (now_unixtime - old_unixtime) > seconds:  # 超过60秒
+            return None, 2
+
         lines = alllines[1:]
         for line in lines:
             line = str(line).replace(" ", "").strip()
             ln_ary = re.split(separator, line)
-            if len(ln_ary) < 2: continue
+            if len(ln_ary) < 2:
+                continue
             if ln_ary[0] == key:
-                return (ln_ary[1], 0)
-        return (None, 1)
+                return ln_ary[1], 0
+        return None, 1
 
     def save_to_cache_file(self, content):
-        ## 如果是dict，则先转换为json字符串再写入
-        if type(content) == types.DictType:
+        # 如果是dict，则先转换为json字符串再写入
+        if isinstance(content, dict):
             content = json.dumps(content)
         now_unixtime = int(time.time())
         with open(self._cache_file, "w") as fd:
             fd.write(str(now_unixtime)+"\n")
             fd.write(content)
-            fd.close()
