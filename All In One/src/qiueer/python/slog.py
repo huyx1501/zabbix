@@ -65,8 +65,12 @@ class slog(object):
             self._count = count if count else 5 # five pieces
             self._filename = filename
             self._logid = "qiueer"
-            if os.path.exists(filename) == False:
-                pass
+            dirname = os.path.dirname(filename)
+            if not os.path.isabs(dirname):
+                exit("Can not access to %s" % dirname)
+            else:
+                if not os.path.isdir(dirname):
+                    os.makedirs(dirname)  # 日志目录不存在时自动创建
             self._logger = logging.getLogger(self._logid)
 
             self._logger.handlers = []
