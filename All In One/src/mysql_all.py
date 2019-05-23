@@ -39,18 +39,9 @@ class Mysql(object):
             port = port if port else self._port
 
             bp = which("mysql")
-            binpaths = [
-                bp,
-                "/data0/mysql/product/bin/mysql",
-            ]
-            mysql_path = None
-            for p in binpaths:
-                if os.path.isfile(p):
-                    mysql_path = p
-                    break
-                
-            if not mysql_path:
-                return
+            mysql_path = bp if bp else "/usr/local/bin/mysql"  # 自编译mysql请修改此路径或自行添加PATH变量
+            if not (os.path.isfile(mysql_path) and os.access(mysql_path, os.X_OK)):
+                exit("No mysql client found.")
             sql_cmdstr = '%s -h%s -P%s -u"%s" -p"%s" -e "%s"' % (mysql_path, hostname, port, username, passwd, cmdstr)
             c2 = cmds(sql_cmdstr, timeout=2)
             stdo = c2.stdo()
