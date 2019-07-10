@@ -1,4 +1,4 @@
-## All In One目录结构及说明：
+## 目录结构及说明：
 ```  
 ├── confs                       放置所有zabbix key的配置  
 ├── install_zabbix_extend.sh    安装脚本  
